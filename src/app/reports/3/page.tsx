@@ -1,36 +1,6 @@
-import pool from '@/lib/db';
 import Link from 'next/link';
+import { getStudentsAtRiskPage } from '@/services/reportService';
 
-interface StudentRisk {
-  student_id: number;
-  name: string;
-  email: string;
-  program: string;
-  current_average: string;
-  total_absences: string;
-  risk_status: string;
-}
-
-async function getData(search: string, page: number, limit: number) {
-  const offset = (page - 1) * limit;
-  const query = `
-    SELECT * FROM vw_students_at_risk 
-    WHERE name ILIKE $1 OR email ILIKE $1
-    ORDER BY CASE WHEN risk_status LIKE 'CRITICAL%' THEN 1 ELSE 2 END, current_average ASC
-    LIMIT $2 OFFSET $3
-  `;
-  const result = await pool.query(query, [`%${search}%`, limit, offset]);
-  return result.rows as StudentRisk[];
-}
-
-async function getCount(search: string) {
-  const query = `
-    SELECT COUNT(*) FROM vw_students_at_risk 
-    WHERE name ILIKE $1 OR email ILIKE $1
-  `;
-  const result = await pool.query(query, [`%${search}%`]);
-  return Number(result.rows[0].count);
-}
 
 type Props = { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }
 
@@ -41,8 +11,7 @@ export default async function Report3Page(props: Props) {
   const page = Number(searchParams.page) || 1;
   const LIMIT = 5; 
   
-  const data = await getData(query, page, LIMIT);
-  const totalItems = await getCount(query);
+  const { rows: data, total: totalItems } = await getStudentsAtRiskPage(query, page, LIMIT);
   const hasNextPage = (page * LIMIT) < totalItems;
 
   return (

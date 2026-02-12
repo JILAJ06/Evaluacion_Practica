@@ -1,30 +1,11 @@
-import pool from '@/lib/db';
 import Link from 'next/link';
 import { z } from 'zod';
+import { getCoursePerformance } from '@/services/reportService';
 
 const filterSchema = z.object({
   term: z.string().optional().default('2025-A'),
 });
 
-interface CourseStat {
-  course_id: number;
-  course_name: string;
-  term: string;
-  total_students: string;
-  average_grade: string;
-  failed_students: string;
-  failure_rate: string;
-}
-
-async function getData(term: string) {
-  const query = `
-    SELECT * FROM vw_course_performance 
-    WHERE term = $1
-    ORDER BY failure_rate DESC
-  `;
-  const result = await pool.query(query, [term]);
-  return result.rows as CourseStat[];
-}
 
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -33,7 +14,7 @@ type Props = {
 export default async function Report1Page(props: Props) {
   const searchParams = await props.searchParams;
   const { term } = filterSchema.parse({ term: searchParams.term });
-  const data = await getData(term);
+  const data = await getCoursePerformance(term);
   const availableTerms = ['2024-B', '2025-A', '2025-B'];
 
   return (
@@ -82,10 +63,10 @@ export default async function Report1Page(props: Props) {
               {data.map((row, idx) => {
                 const failureRate = Number(row.failure_rate);
                 return (
-                  <tr key={row.course_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                  <tr key={row.course_code} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-bold text-slate-900">{row.course_name}</div>
-                      <div className="text-xs text-slate-500 font-mono">CLAVE: {row.course_id}</div>
+                      <div className="text-xs text-slate-500 font-mono">CLAVE: {row.course_code}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-700 font-mono">
                       {row.total_students}

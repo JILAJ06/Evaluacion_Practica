@@ -14,7 +14,7 @@ INSERT INTO courses (code, name, credits) VALUES
 ('BD201', 'Bases de Datos Avanzadas', 8),         
 ('FIS101', 'Física Clásica', 6),                  
 ('ETH101', 'Ética y Valores', 4),                 
-('ALG202', 'Algoritmos y Estructuras', 9);      
+('ALG202', 'Algoritmos y Estructuras', 9),      
 ('AST301', 'Astronomía Moderna', 5);
 
 INSERT INTO students (name, email, program, enrollment_year) VALUES

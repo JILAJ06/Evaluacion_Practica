@@ -1,32 +1,16 @@
-import pool from '@/lib/db';
 import Link from 'next/link';
 import { z } from 'zod';
+import { getRankStudents } from '@/services/reportService';
 
 const filterSchema = z.object({ program: z.string().optional() });
 
-interface RankStat {
-  student_id: number;
-  name: string;
-  program: string;
-  final_average: string;
-  rank_in_program: string;
-}
-
-async function getData(program?: string) {
-  let query = `SELECT * FROM vw_rank_students`;
-  const params: string[] = [];
-  if (program) { query += ` WHERE program = $1`; params.push(program); }
-  query += ` ORDER BY program, rank_in_program ASC`;
-  const result = await pool.query(query, params);
-  return result.rows as RankStat[];
-}
 
 type Props = { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }
 
 export default async function Report5Page(props: Props) {
   const searchParams = await props.searchParams;
   const { program } = filterSchema.parse({ program: searchParams.program });
-  const data = await getData(program);
+  const data = await getRankStudents(program);
   const programs = ['Ing. Software', 'Arquitectura', 'Derecho'];
 
   return (
@@ -59,12 +43,12 @@ export default async function Report5Page(props: Props) {
                 <tr key={row.student_id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 w-16 text-center">
                     <span className={`inline-block w-8 h-8 leading-8 rounded-full font-serif font-bold text-sm ${
-                      row.rank_in_program === '1' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                      row.rank_in_program === '2' ? 'bg-slate-200 text-slate-700 border border-slate-300' :
-                      row.rank_in_program === '3' ? 'bg-orange-100 text-orange-800 border border-orange-300' :
+                      row.rank_position === 1 ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                      row.rank_position === 2 ? 'bg-slate-200 text-slate-700 border border-slate-300' :
+                      row.rank_position === 3 ? 'bg-orange-100 text-orange-800 border border-orange-300' :
                       'text-slate-400'
                     }`}>
-                      {row.rank_in_program}
+                      {row.rank_position}
                     </span>
                   </td>
                   <td className="px-6 py-4">

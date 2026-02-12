@@ -1,26 +1,6 @@
-import pool from '@/lib/db';
 import Link from 'next/link';
+import { getTeacherLoadPage } from '@/services/reportService';
 
-interface TeacherLoad {
-  teacher_id: number;
-  teacher_name: string;
-  term: string;
-  assigned_groups: string;
-  total_students_attended: string;
-  avg_grading_strictness: string;
-}
-
-async function getData(page: number, limit: number) {
-  const offset = (page - 1) * limit;
-  const query = `SELECT * FROM vw_teacher_load ORDER BY total_students_attended DESC LIMIT $1 OFFSET $2`;
-  const result = await pool.query(query, [limit, offset]);
-  return result.rows as TeacherLoad[];
-}
-
-async function getTotalCount() {
-  const result = await pool.query('SELECT COUNT(*) FROM vw_teacher_load');
-  return Number(result.rows[0].count);
-}
 
 type Props = { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }
 
@@ -28,8 +8,7 @@ export default async function Report2Page(props: Props) {
   const searchParams = await props.searchParams;
   const page = Number(searchParams.page) || 1;
   const LIMIT = 5;
-  const data = await getData(page, LIMIT);
-  const totalItems = await getTotalCount();
+  const { rows: data, total: totalItems } = await getTeacherLoadPage(page, LIMIT);
   const hasNextPage = (page * LIMIT) < totalItems;
 
   return (
@@ -73,7 +52,7 @@ export default async function Report2Page(props: Props) {
                 </div>
                 <div className="border-l border-slate-100 pl-8">
                   <p className="text-xs text-slate-400 uppercase tracking-wider font-bold">Alumnos</p>
-                  <p className="text-xl font-serif font-bold text-blue-900">{row.total_students_attended}</p>
+                  <p className="text-xl font-serif font-bold text-blue-900">{row.total_students_taught}</p>
                 </div>
                 <div className="border-l border-slate-100 pl-8">
                   <p className="text-xs text-slate-400 uppercase tracking-wider font-bold">Promedio Clase</p>

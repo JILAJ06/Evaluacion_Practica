@@ -1,61 +1,67 @@
-## 📖 ¿De qué trata este proyecto?
+# SIGA - Dashboard de Reportes Académicos
 
-**SIGA** es una plataforma web diseñada para modernizar la forma en que una escuela toma decisiones.
-
-Imagina que eres el Coordinador Académico. En lugar de revisar cientos de listas en Excel para saber qué pasa en la escuela, este sistema te ofrece un **Tablero de Control (Dashboard)** visual e inteligente.
-
-El objetivo es resolver problemas reales:
-1.  **Detectar Alumnos en Riesgo:** El sistema cruza datos de calificaciones y faltas para avisarte automáticamente quién podría reprobar.
-2.  **Evaluar el Rendimiento:** Muestra qué materias son las más difíciles y cuál es el promedio general.
-3.  **Monitoreo Docente:** Permite ver la carga de trabajo de los profesores y cómo evalúan a sus grupos.
-4.  **Reconocer la Excelencia:** Genera automáticamente el "Cuadro de Honor" con los mejores promedios por carrera.
-
-Es tecnología aplicada para mejorar la educación, pasando de "datos sueltos" a "información útil".
+**Materia:** Aplicaciones Web Orientadas a Servicios (AWOS) & Base de Datos Avanzadas
+**Entrega:** Lab Reportes Next.js + PostgreSQL + Docker
+**Alumno:** Alexander Jesús Jiménez León
 
 ---
 
-## ✅ Cumplimiento de Requisitos (Para Evaluación)
+## 📖 Descripción del Proyecto
 
-Aunque el sistema es fácil de usar, por dentro cumple estrictamente con todos los requisitos técnicos avanzados solicitados en la práctica:
+Este proyecto es un Dashboard de Inteligencia de Negocios (BI) para la coordinación académica. Permite visualizar métricas críticas como rendimiento por materia, carga docente y detección de riesgo estudiantil.
 
-| Requisito Técnico | ¿Dónde está aplicado? | Explicación sencilla |
-| :--- | :--- | :--- |
-| **Window Functions** | `db/03_reports_vw.sql` (Vista 5) | Se usó para crear el **Ranking** (1°, 2°, 3° lugar) reiniciando la cuenta por cada carrera. |
-| **CTE (Tablas Temporales)** | `db/03_reports_vw.sql` (Vista 3) | Permite calcular asistencias y promedios en memoria antes de filtrar a los alumnos en riesgo. |
-| **HAVING (Filtros Avanzados)** | `db/03_reports_vw.sql` (Vistas 1 y 2) | Sirve para ignorar grupos vacíos o maestros sin alumnos al calcular promedios. |
-| **Manejo de Nulos (COALESCE)** | `db/03_reports_vw.sql` (Vista 4) | Evita errores matemáticos si un grupo no tiene asistencias registradas (pone 0 en vez de error). |
-| **Lógica Condicional (CASE)** | `db/03_reports_vw.sql` (Vista 1) | Clasifica automáticamente si un alumno está "Aprobado" o "Reprobado" según su nota. |
-| **Seguridad (Roles)** | `db/05_roles.sql` | La aplicación usa un usuario restringido que **solo puede leer reportes**, protegiendo los datos originales. |
+La arquitectura sigue un enfoque **"Database-First"**: toda la lógica de negocio compleja (promedios, rankings, detección de riesgo) se procesa directamente en **PostgreSQL** mediante Vistas Materializadas Lógicamente, mientras que **Next.js** se encarga únicamente de la presentación y el filtrado seguro.
 
 ---
 
-## 🛠️ Tecnologías que lo hacen funcionar
+## 🧩 Arquitectura SOA Aplicada
 
-* **La Cara del Proyecto (Frontend):** Next.js 16 (lo más nuevo en React) con diseño adaptable a celulares (Tailwind CSS).
-* **El Cerebro (Base de Datos):** PostgreSQL 18.
-* **El Motor (Infraestructura):** Docker Compose (para que funcione en cualquier computadora con un solo clic).
+El proyecto ahora separa responsabilidades en **servicios** con interfaces claras para consumir datos desde la UI:
+
+- **Capa de Presentación (Next.js UI):** páginas de reportes en `src/app/reports/*/page.tsx`.
+- **Capa de Servicios (SOA):** orquesta casos de uso y paginación en `src/services/reportService.ts`.
+- **Capa de Repositorio (Data Access):** consultas SQL en `src/repositories/reportRepository.ts`.
+- **Capa de Datos (PostgreSQL):** vistas y roles definidos en `db/*.sql`.
+
+Este enfoque permite **reutilizar servicios**, centralizar reglas de acceso y aislar cambios en SQL sin romper la UI.
 
 ---
 
-## 🚀 Guía de Instalación (Paso a Paso)
+## ⚖️ Trade-offs: Decisiones de Diseño (SQL vs Next.js)
 
-Este proyecto usa **Docker**, lo que garantiza que funcionará en tu máquina sin instalar nada extra.
+Se decidió delegar la carga de procesamiento a la Base de Datos en lugar del Backend (Node.js) por las siguientes razones:
 
-### Paso 1: Configurar la Seguridad
-Las contraseñas no deben viajar en el código.
-1.  Busca el archivo llamado `.env.example` en la carpeta principal.
-2.  Haz una copia de ese archivo y cámbiale el nombre a `.env`.
-    * *(En Windows: Copiar y Pegar -> Renombrar a `.env`)*.
-3.  Listo, el sistema ya tiene las credenciales seguras configuradas.
+* **Rendimiento en Agregaciones:** Calcular el promedio de 10,000 calificaciones usando `AVG()` en PostgreSQL es órdenes de magnitud más rápido que traer 10,000 objetos JSON a Next.js y usar `array.reduce()`.
+* **Consistencia de Datos:** Al definir "Alumno Reprobado" (< 6.0) en una Vista SQL (`vw_course_performance`), garantizamos que cualquier reporte futuro use la misma regla. Si se hiciera en JS, habría que replicar la lógica en múltiples componentes, aumentando el riesgo de error humano.
+* **Seguridad de Acceso:** Al exponer solo Vistas y no Tablas, reducimos la superficie de ataque. Si la aplicación es comprometida, el atacante solo ve datos procesados, no la estructura cruda de la base de datos.
 
-### Paso 2: Arrancar el Sistema
-Abre una terminal en la carpeta del proyecto y escribe:
+---
 
-```bash
-docker compose up --build
-```
-Si deseas borrar todo y volver a cargar los datos de prueba originales, ejecuta 
-```bash
-docker compose down -v 
-```
-y vuelve a construir.
+## 🛡️ Threat Model (Modelo de Amenazas)
+
+[cite_start]Para cumplir con los requisitos de seguridad, se implementaron las siguientes defensas:
+
+1.  **Prevención de Inyección SQL:**
+    * **Riesgo:** Un atacante podría manipular los filtros de búsqueda para borrar tablas.
+    * **Mitigación:** Uso estricto de **consultas parametrizadas** en el cliente `pg` (ej. `WHERE term = $1`). Los inputs del usuario nunca se concatenan directamente en el string SQL.
+    * **Validación:** Uso de **Zod** para validar que los parámetros de URL (como `page` o `term`) sean del tipo correcto antes de tocar la BD.
+
+2.  **Principio de Menor Privilegio (Least Privilege):**
+    * **Riesgo:** Si las credenciales de la app son robadas, el atacante podría modificar calificaciones.
+    * **Mitigación:** La aplicación NO se conecta como `postgres` (superusuario). Se creó un rol específico `dashboard_user` que tiene permisos **REVOCADOS** en todas las tablas y solo tiene `GRANT SELECT` sobre las 5 Vistas específicas.
+
+3.  **Gestión de Secretos:**
+    * **Riesgo:** Exposición de contraseñas en repositorios públicos.
+    * **Mitigación:** Las credenciales se inyectan mediante variables de entorno (`.env`) y no están "hardcodeadas" en el código ni en el `docker-compose.yml`. El archivo `.env` está excluido en `.gitignore`.
+
+---
+
+## 🔎 Evidencia de Performance (EXPLAIN ANALYZE)
+
+[cite_start]A continuación se demuestra la optimización de consultas mediante índices B-Tree[cite: 169].
+
+### Caso 1: Búsqueda de Alumnos (Reporte de Riesgo)
+**Consulta:** `SELECT * FROM students WHERE email = 'alex@student.edu';`
+**Análisis:** Sin índice, PostgreSQL realiza un *Sequential Scan* (costoso). Con el índice `idx_students_email`, realiza un *Index Scan*.
+```text
+Index Scan using idx_students_email on students  (cost=0.14..8.16 rows=1 width=128)

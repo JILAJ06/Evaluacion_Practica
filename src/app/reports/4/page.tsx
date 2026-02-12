@@ -1,23 +1,9 @@
-import pool from '@/lib/db';
 import Link from 'next/link';
+import { getAttendanceByGroup } from '@/services/reportService';
 
-interface AttendanceStat {
-  group_id: number;
-  course_name: string;
-  teacher_name: string;
-  term: string;
-  total_classes_recorded: string;
-  attendance_percentage: string;
-}
-
-async function getData() {
-  const query = `SELECT * FROM vw_attendance_by_group ORDER BY attendance_percentage ASC`;
-  const result = await pool.query(query);
-  return result.rows as AttendanceStat[];
-}
 
 export default async function Report4Page() {
-  const data = await getData();
+  const data = await getAttendanceByGroup();
 
   return (
     <div className="min-h-screen bg-slate-50">
