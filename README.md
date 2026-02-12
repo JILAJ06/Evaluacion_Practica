@@ -1,67 +1,58 @@
-# SIGA - Dashboard de Reportes Académicos
+# SIGA - Sistema Integral de Gestión Académica (Arquitectura SOA)
 
-**Materia:** Aplicaciones Web Orientadas a Servicios (AWOS) & Base de Datos Avanzadas
-**Entrega:** Lab Reportes Next.js + PostgreSQL + Docker
+**Asignatura:** Aplicaciones Web Orientadas a Servicios (AWOS) & Base de Datos Avanzadas
+**Arquitectura:** SOA (Service-Oriented Architecture) con Next.js + PostgreSQL + Docker
 **Alumno:** Alexander Jesús Jiménez León
 
 ---
 
-## 📖 Descripción del Proyecto
+## 🏗️ Arquitectura del Sistema (SOA)
 
-Este proyecto es un Dashboard de Inteligencia de Negocios (BI) para la coordinación académica. Permite visualizar métricas críticas como rendimiento por materia, carga docente y detección de riesgo estudiantil.
+Este proyecto ha sido diseñado siguiendo estrictamente una **Arquitectura Orientada a Servicios (SOA)** para garantizar el desacoplamiento entre la interfaz de usuario y la lógica de datos.
 
-La arquitectura sigue un enfoque **"Database-First"**: toda la lógica de negocio compleja (promedios, rankings, detección de riesgo) se procesa directamente en **PostgreSQL** mediante Vistas Materializadas Lógicamente, mientras que **Next.js** se encarga únicamente de la presentación y el filtrado seguro.
-
----
-
-## 🧩 Arquitectura SOA Aplicada
-
-El proyecto ahora separa responsabilidades en **servicios** con interfaces claras para consumir datos desde la UI:
-
-- **Capa de Presentación (Next.js UI):** páginas de reportes en `src/app/reports/*/page.tsx`.
-- **Capa de Servicios (SOA):** orquesta casos de uso y paginación en `src/services/reportService.ts`.
-- **Capa de Repositorio (Data Access):** consultas SQL en `src/repositories/reportRepository.ts`.
-- **Capa de Datos (PostgreSQL):** vistas y roles definidos en `db/*.sql`.
-
-Este enfoque permite **reutilizar servicios**, centralizar reglas de acceso y aislar cambios en SQL sin romper la UI.
+### Diagrama de Capas
+1.  **Capa de Presentación (Frontend):** * Componentes de Next.js (`src/app/reports/*`).
+    * Responsabilidad: Renderizado y experiencia de usuario. **Nunca** accede a la base de datos directamente.
+2.  **Capa de Servicio/Repositorio (Backend Logic):**
+    * Repositorios (`src/repositories/*`).
+    * Responsabilidad: Abstracción de datos. Actúa como intermediario que consulta las Vistas SQL y entrega objetos tipados (Interfaces TypeScript).
+3.  **Capa de Datos (Database):**
+    * PostgreSQL 18.
+    * Responsabilidad: Lógica de negocio pesada encapsulada en **Vistas Materializadas Lógicamente**.
 
 ---
 
-## ⚖️ Trade-offs: Decisiones de Diseño (SQL vs Next.js)
+## ⚖️ Trade-offs: Decisiones de Diseño
 
-Se decidió delegar la carga de procesamiento a la Base de Datos en lugar del Backend (Node.js) por las siguientes razones:
+### 1. SQL Views vs. Lógica en Código (Node.js)
+**Decisión:** Se delegó el cálculo de promedios, rankings y detección de riesgo a **Vistas SQL**.
+* **Justificación:** PostgreSQL está optimizado para agregaciones matemáticas (`AVG`, `COUNT`, `RANK`). Hacer esto en JavaScript implicaría traer miles de registros a la memoria del servidor para iterarlos, lo cual es ineficiente (O(n)) comparado con la optimización de base de datos.
 
-* **Rendimiento en Agregaciones:** Calcular el promedio de 10,000 calificaciones usando `AVG()` en PostgreSQL es órdenes de magnitud más rápido que traer 10,000 objetos JSON a Next.js y usar `array.reduce()`.
-* **Consistencia de Datos:** Al definir "Alumno Reprobado" (< 6.0) en una Vista SQL (`vw_course_performance`), garantizamos que cualquier reporte futuro use la misma regla. Si se hiciera en JS, habría que replicar la lógica en múltiples componentes, aumentando el riesgo de error humano.
-* **Seguridad de Acceso:** Al exponer solo Vistas y no Tablas, reducimos la superficie de ataque. Si la aplicación es comprometida, el atacante solo ve datos procesados, no la estructura cruda de la base de datos.
+### 2. Implementación del Patrón Repository
+**Decisión:** Se creó una capa `src/repositories` en lugar de hacer queries en los componentes.
+* **Justificación:** Cumple con el principio de **Responsabilidad Única**. Si la base de datos cambia, solo se modifica el repositorio, no la interfaz gráfica. Facilita la creación futura de una API REST pública.
 
 ---
 
 ## 🛡️ Threat Model (Modelo de Amenazas)
 
-[cite_start]Para cumplir con los requisitos de seguridad, se implementaron las siguientes defensas:
+Siguiendo las mejores prácticas de seguridad, se implementaron las siguientes defensas:
 
-1.  **Prevención de Inyección SQL:**
-    * **Riesgo:** Un atacante podría manipular los filtros de búsqueda para borrar tablas.
-    * **Mitigación:** Uso estricto de **consultas parametrizadas** en el cliente `pg` (ej. `WHERE term = $1`). Los inputs del usuario nunca se concatenan directamente en el string SQL.
-    * **Validación:** Uso de **Zod** para validar que los parámetros de URL (como `page` o `term`) sean del tipo correcto antes de tocar la BD.
-
-2.  **Principio de Menor Privilegio (Least Privilege):**
-    * **Riesgo:** Si las credenciales de la app son robadas, el atacante podría modificar calificaciones.
-    * **Mitigación:** La aplicación NO se conecta como `postgres` (superusuario). Se creó un rol específico `dashboard_user` que tiene permisos **REVOCADOS** en todas las tablas y solo tiene `GRANT SELECT` sobre las 5 Vistas específicas.
-
-3.  **Gestión de Secretos:**
-    * **Riesgo:** Exposición de contraseñas en repositorios públicos.
-    * **Mitigación:** Las credenciales se inyectan mediante variables de entorno (`.env`) y no están "hardcodeadas" en el código ni en el `docker-compose.yml`. El archivo `.env` está excluido en `.gitignore`.
+1.  **Inyección SQL:**
+    * **Mitigación:** Uso estricto de **consultas parametrizadas** (`$1`, `$2`) en los repositorios. Los inputs del usuario (filtros de búsqueda) nunca se concatenan directamente.
+2.  **Exposición de Credenciales:**
+    * **Mitigación:** Las credenciales NO están en el código. Se inyectan vía variables de entorno (`.env`) que son ignoradas por git.
+3.  **Acceso Privilegiado:**
+    * **Mitigación:** La aplicación se conecta con el rol `dashboard_user` (creado en `db/05_roles.sql`), el cual tiene permisos **REVOCADOS** para escribir/borrar tablas y solo tiene `GRANT SELECT` sobre las 5 vistas específicas.
 
 ---
 
 ## 🔎 Evidencia de Performance (EXPLAIN ANALYZE)
 
-[cite_start]A continuación se demuestra la optimización de consultas mediante índices B-Tree[cite: 169].
+Se crearon índices B-Tree (`db/04_indexes.sql`) para optimizar las consultas más pesadas.
 
-### Caso 1: Búsqueda de Alumnos (Reporte de Riesgo)
-**Consulta:** `SELECT * FROM students WHERE email = 'alex@student.edu';`
-**Análisis:** Sin índice, PostgreSQL realiza un *Sequential Scan* (costoso). Con el índice `idx_students_email`, realiza un *Index Scan*.
+### Caso 1: Dashboard de Riesgo (Búsqueda por Texto)
+**Consulta:** Filtrar alumnos por email en la vista de riesgo.
+**Resultado:** El índice `idx_students_email` reduce la complejidad de la búsqueda de lineal a logarítmica.
 ```text
-Index Scan using idx_students_email on students  (cost=0.14..8.16 rows=1 width=128)
+Index Scan using idx_students_email on students (cost=0.14..8.16 rows=1 width=128)

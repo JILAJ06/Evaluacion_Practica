@@ -21,10 +21,10 @@ export async function getTeacherLoad(page: number = 1): Promise<TeacherLoad[]> {
   const limit = 5;
   const offset = (page - 1) * limit;
   const query = `
-    SELECT * FROM vw_teacher_load 
-    ORDER BY total_students_taught DESC  <-- AQUÍ ESTABA EL ERROR
-    LIMIT $1 OFFSET $2
-  `;
+  SELECT * FROM vw_teacher_load 
+  ORDER BY total_students_taught DESC
+  LIMIT $1 OFFSET $2
+`;
   
   const result = await pool.query(query, [limit, offset]);
   return result.rows as TeacherLoad[];
